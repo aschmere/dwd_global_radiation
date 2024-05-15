@@ -261,7 +261,7 @@ Location: My Home Location
         | 2024-05-16 06:00:00 |         18.5645     |
         +---------------------+---------------------+
 ```
-
+--
 # References
 <a href="https://www.cmsaf.eu/SharedDocs/Literatur/document/2023/saf_cm_dwd_pum_meteosat_hel_sarah_3_3_pdf" id="R1">[1] Product User Manual Meteosat Solar Surface Radiation and Effective Cloud Albedo Climate Data Records SARAH-3<br>
 <a href="https://www.dwd.de/DE/leistungen/fernerkund_globalstrahlung_sis/fernerkund_globalstrahlung_sis.html" id="R2">[2] DWD - Product Description on Global Radiation<br>
