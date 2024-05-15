@@ -1,0 +1,10 @@
+dwd_global_radiation/__pycache__
+tests/coordinates.bak
+.venv-dwd-global-radiation/
+.coverage
+.vscode
+requirements_pipfreeze.txt
+dist
+dwd_global_radiation.egg-info
+build
+.hidden
