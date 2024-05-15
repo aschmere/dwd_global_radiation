@@ -190,9 +190,9 @@ def load_forecast_dataset(current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BAC
 
     if last_exception:
         # We keep the try/except code block for now as a sceleton, but actually we do not want
-        # to stop the program on this kind of exception. Justification: The program should handle 
+        # to stop the program on this kind of exception. Justification: The program should handle
         # the unavailability of the underlying cloud service and move on gracefully.
-        # It's up to the class service health attributes of class GlobalRadiation to signal the 
+        # It's up to the class service health attributes of class GlobalRadiation to signal to
         # the end user of this library, that there is a problem with the cloud service.
         pass
 
@@ -327,7 +327,7 @@ def parse_pre_text(pre_text, context):
 def process_line(line, context):
     """
     Analyzes a single line from the pre-formatted text to determine if it matches the criteria
-    for a valid file link. 
+    for a valid file link.
     If valid, extracts the date and time info, checks against the maximum age,
     and stores the link and timestamp if all conditions are met.
 

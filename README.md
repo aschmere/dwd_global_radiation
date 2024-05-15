@@ -1,7 +1,7 @@
 DISCLAIMER: This project is a private open source project and is not affiliated with the German public meteorology service institute "Deutscher Wetterdienst" (DWD). However, it uses its publicly available data interfaces. 
 
 # Summary
-The DWD Global Radiation Observation and Forecast Data Library is a python package, which provides convenient access to forecast and observation data regarding Surface Incoming Solar Radiation (SIS) [[1]](#R1) or also known as "Global Horizontal Irradiance" (GHI). The data currently used covers roughly a geographical area of Germany, Austria and Switzerland. SIS or GHI is the most important input variable for determining the electrical output of photovoltaic systems. Therefore this data is particularly useful in "Smart Home"-scenarios, if you want to correlate the actual output of your photovoltaic system with measured SIS or can even help forecasting this output based on SIS forecast data. SIS data can also be helpful in regulating room heating systems, as solar irradiance has a big impact on the room temperature as well.
+The DWD Global Radiation Observation and Forecast Data Library is a python package, which provides convenient access to forecast and observation data regarding Surface Incoming Solar Radiation (SIS) [[1]](#R1) or also known as "Global Horizontal Irradiance" (GHI) issued by the German meteorology service institute "Deutscher Wetterdienst" (DWD). The data currently used by this package covers roughly a geographical area of Germany, Austria and Switzerland. SIS or GHI is the most important input variable for determining the electrical output of photovoltaic systems. Therefore this data is particularly useful in "Smart Home"-scenarios, if you want to correlate the actual output of your photovoltaic system with measured SIS or can even help forecasting this output based on SIS forecast data. SIS data can also be helpful in regulating room heating systems, as solar irradiance can have a big impact on the room temperature as well.
 
 
 For more details regarding Solar irradiance terminology and the global radiation data provided by DWD via its "Open Data" server, see [[2]](#R2).
@@ -11,7 +11,7 @@ For details on radiation terminology you can consult various resources, e.g. [[3
 <ins>Note:</ins>
 Complying with typical best practices for using Python it is highly recommended to create and use a python virtual environement [[4]](#R4) as installation target.
 ```
-python3 -m pip install dwd-global-radiation
+python3 -m pip install dwd_global_radiation
 ```
 The listed installation command will usually install all required dependant Python packages.
 As of the current version of this package the following Python packages are required:
@@ -153,7 +153,91 @@ Next step will be retrieve actual forecast data by digging deeper into the objec
 [ForecastEntry(timestamp=1715720400.0, sis=0.00024414062), ForecastEntry(timestamp=1715724000.0, sis=0.00048828125), ForecastEntry(timestamp=1715727600.0, sis=0.027832031), ForecastEntry(timestamp=1715731200.0, sis=0.0), ForecastEntry(timestamp=1715734800.0, sis=0.0), ForecastEntry(timestamp=1715738400.0, sis=0.0), ForecastEntry(timestamp=1715742000.0, sis=0.005859375), ForecastEntry(timestamp=1715745600.0, sis=17.42627), ForecastEntry(timestamp=1715749200.0, sis=113.72803), ForecastEntry(timestamp=1715752800.0, sis=259.56006), ForecastEntry(timestamp=1715756400.0, sis=420.26416), ForecastEntry(timestamp=1715760000.0, sis=572.041), ForecastEntry(timestamp=1715763600.0, sis=699.666), ForecastEntry(timestamp=1715767200.0, sis=790.8164), ForecastEntry(timestamp=1715770800.0, sis=839.0547), ForecastEntry(timestamp=1715774400.0, sis=840.1162), ForecastEntry(timestamp=1715778000.0, sis=795.8408)]
 ```
 We see from the output above, that we have a list of 17 items of class `ForecastEntry`, each with a named tuple of `timestamp` and `sis`. `timestamp` is the time in future (maximum 17 hours ahead of current time), for which the forecast is valid, and `sis` is the actually forecasted global radiation value in W/m2.
-The targeted access to specific forecast entries follows the same coding principles as already elaborated for the global radiation measurements above and hence this is not shown for the forecasts again. --
+The targeted access to specific forecast entries follows the same coding principles as already elaborated for the global radiation measurements above and hence this is not demonstrated for the forecasts again.
+
+## Print Service
+Once you have fetched all measurement or forecast data from DWD Open Data servers, you may find it convenient in order to familiarize yourself with this library or for troubleshooting and analysis purposes to just dump the gathered data in an interactive console. The following code line demonstrates the usage of the print service along with an example output:
+```
+>>> objGlobalRadiation.print_data()
+=========================================================
+DWD Forecast and Observation Data from Selected Locations
+=========================================================
+Location: My Home Location
+     Latitude: 52.52
+     Longitude: 13.405
+     Measurements:
+        Grid Latitude: 52.5
+        Grid Longitude: 13.4
+        Distance of the location to the nearest gridpoint in km: 2.249
+        +---------------------+---------------------+
+        | Timestamp           |   SIS Value in W/m2 |
+        +=====================+=====================+
+        | 2024-05-15 12:45:00 |                 857 |
+        +---------------------+---------------------+
+        | 2024-05-15 12:30:00 |                 854 |
+        +---------------------+---------------------+
+        | 2024-05-15 12:15:00 |                 848 |
+        +---------------------+---------------------+
+        | 2024-05-15 12:00:00 |                 840 |
+        +---------------------+---------------------+
+        | 2024-05-15 11:45:00 |                 828 |
+        +---------------------+---------------------+
+        | 2024-05-15 11:30:00 |                 814 |
+        +---------------------+---------------------+
+        | 2024-05-15 11:15:00 |                 797 |
+        +---------------------+---------------------+
+        | 2024-05-15 11:00:00 |                 777 |
+        +---------------------+---------------------+
+        | 2024-05-15 10:45:00 |                 755 |
+        +---------------------+---------------------+
+        | 2024-05-15 10:30:00 |                 730 |
+        +---------------------+---------------------+
+        | 2024-05-15 10:15:00 |                 703 |
+        +---------------------+---------------------+
+     Forecasts:
+        Issuance Time: 2024-05-15 13:00:00
+        Grid Latitude: 52.5
+        Grid Longitude: 13.4
+        Distance of the location to the nearest gridpoint in km: 2.249
+        Metadata: {'standard_name': 'downwelling_shortwave_flux_in_air', 'long_name': 'solar surface irradiance', 'units': 'Watt m-2'}
+        +---------------------+---------------------+
+        | Timestamp           |   SIS Value in W/m2 |
+        +=====================+=====================+
+        | 2024-05-15 14:00:00 |        823.096      |
+        +---------------------+---------------------+
+        | 2024-05-15 15:00:00 |        796.442      |
+        +---------------------+---------------------+
+        | 2024-05-15 16:00:00 |        705.616      |
+        +---------------------+---------------------+
+        | 2024-05-15 17:00:00 |        567.22       |
+        +---------------------+---------------------+
+        | 2024-05-15 18:00:00 |        397.645      |
+        +---------------------+---------------------+
+        | 2024-05-15 19:00:00 |        273.018      |
+        +---------------------+---------------------+
+        | 2024-05-15 20:00:00 |        120.846      |
+        +---------------------+---------------------+
+        | 2024-05-15 21:00:00 |         22.1733     |
+        +---------------------+---------------------+
+        | 2024-05-15 22:00:00 |          0.0263672  |
+        +---------------------+---------------------+
+        | 2024-05-15 23:00:00 |          0          |
+        +---------------------+---------------------+
+        | 2024-05-16 00:00:00 |          0.0449219  |
+        +---------------------+---------------------+
+        | 2024-05-16 01:00:00 |          0.00683594 |
+        +---------------------+---------------------+
+        | 2024-05-16 02:00:00 |          0.0205078  |
+        +---------------------+---------------------+
+        | 2024-05-16 03:00:00 |          0.0424805  |
+        +---------------------+---------------------+
+        | 2024-05-16 04:00:00 |          0          |
+        +---------------------+---------------------+
+        | 2024-05-16 05:00:00 |          0.0170898  |
+        +---------------------+---------------------+
+        | 2024-05-16 06:00:00 |         18.5645     |
+        +---------------------+---------------------+
+```
 
 # References
 <a href="https://www.cmsaf.eu/SharedDocs/Literatur/document/2023/saf_cm_dwd_pum_meteosat_hel_sarah_3_3_pdf" id="R1">[1] Product User Manual Meteosat Solar Surface Radiation and Effective Cloud Albedo Climate Data Records SARAH-3<br>

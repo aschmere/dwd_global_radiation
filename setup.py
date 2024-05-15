@@ -1,11 +1,24 @@
+"""Setup configuration for the dwd_global_radiation package.
+
+This package provides tools to access and analyze DWD (Deutscher Wetterdienst)
+global radiation data and forecasts. It is designed for applications in weather forecasting,
+climate studies, and solar energy analysis, utilizing libraries like xarray for data handling
+and netCDF4 for managing data formats.
+
+Author: Arno Schmerer
+License: MIT
+"""
 from setuptools import setup, find_packages
 
+with open('README.md', encoding='utf-8') as f:
+    long_description = f.read()
+
 setup(
-    name='dwd-global-radiation',
-    version='0.1.2-b6',
+    name='dwd_global_radiation',
+    version='1.0.0rc2',
     packages=find_packages(),
     description='Access and analyze DWD global radiation data and forecasts',
-    long_description=open('README.md').read(),
+    long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/aschmere/dwd-global-radiation',
     author='Arno Schmerer',
@@ -22,11 +35,13 @@ setup(
         'xarray>=2024.3.0'
     ],
     classifiers=[
-        'Development Status :: 4 - Beta',  # Change as appropriate
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
+        'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.12',
+        'Topic :: Software Development :: Libraries'
     ],
     keywords=('weather meteorology radiation solar forecasting DWD data environmental data climate '
               'studies solar energy forecasting'),
