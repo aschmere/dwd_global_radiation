@@ -29,7 +29,34 @@ xarray==2024.3.0
 was developed and tested, is 3.12.3.
 
 The workstation, on which you use Python along with this package, needs internet access, specifically via https protocol to the Open Data server of the DWD [[5]](#R5) in order to retrieve global radiation forecasts and observations.
+<<<<<<< HEAD
 
+=======
+# Fast Track
+
+For those, who are quite familiar with Python programming and want to get a real jump start into the most essential parts of this Python package, there is a core workflow without much explanation
+listed below, which can just be executed in an interactive Python console after installation of the package.
+```
+# Import the module
+import dwd_global_radiation as dgr
+
+# Instantiate main object
+objGlobalRadiation=dgr.GlobalRadiation()
+
+# Add location
+objGlobalRadiation.add_location(name="My Home Location", latitude=52.5200, longitude=13.4050)
+
+# Fetch Measurements from DWD
+objGlobalRadiation.fetch_measurements()
+
+# Fetch Forecasts from DWD
+objGlobalRadiation.fetch_forecasts()
+
+# Print Data
+objGlobalRadiation.print_data()
+```
+This will provide a sample output as it is described similarly in chapter "Print Service" further below on this page.
+>>>>>>> dev
 # Usage
 
 ## Import the Module
