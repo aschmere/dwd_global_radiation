@@ -375,24 +375,40 @@ class GlobalRadiation:
         return all_grid_global_rad_data, coordinates
 
     def _get_nearest_grid_point(self, latitude, longitude, grid_data):
-        all_grid_global_rad_data, coordinates = grid_data
-        distances = utils.haversine(
-            latitude, longitude, coordinates[:, 0], coordinates[:, 1]
-        )
+        all_grid_global_rad_data, _ = grid_data
+
+        # Calculate approximate indices based on the grid resolution of 0.05
+        lat_res = 0.05
+        lon_res = 0.05
+
+        lat_min = np.floor(latitude / lat_res) * lat_res
+        lon_min = np.floor(longitude / lon_res) * lon_res
+
+        # Four closest grid points to check
+        candidate_points = [
+            (lat_min, lon_min),
+            (lat_min, lon_min + lon_res),
+            (lat_min + lat_res, lon_min),
+            (lat_min + lat_res, lon_min + lon_res)
+        ]
+
+        # Compute distances for the four candidate points
+        distances = [
+            utils.haversine(latitude, longitude, lat, lon)
+            for lat, lon in candidate_points
+        ]
+
         nearest_index = np.argmin(distances)
         nearest_distance = round(distances[nearest_index], 3)
+        grid_latitude, grid_longitude = candidate_points[nearest_index]
 
-        lat_index = nearest_index // all_grid_global_rad_data.variables["lat"].shape[0]
-        lon_index = nearest_index % all_grid_global_rad_data.variables["lat"].shape[0]
+        # Find the nearest index in the grid data
+        lat_var = all_grid_global_rad_data.variables["lat"][:]
+        lon_var = all_grid_global_rad_data.variables["lon"][:]
+        lat_index = np.argmin(np.abs(lat_var - grid_latitude))
+        lon_index = np.argmin(np.abs(lon_var - grid_longitude))
 
-        grid_latitude = round(
-            all_grid_global_rad_data.variables["lat"][:][lat_index], 2
-        )
-        grid_longitude = round(
-            all_grid_global_rad_data.variables["lon"][:][lon_index], 2
-        )
-
-        return nearest_index, nearest_distance, grid_latitude, grid_longitude
+        return (lat_index * len(lon_var) + lon_index), nearest_distance, round(grid_latitude, 2), round(grid_longitude, 2)
 
     def _get_measurement_value_from_loaded_data(
         self, all_grid_global_rad_data, nearest_index
