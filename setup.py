@@ -15,7 +15,7 @@ with open('README.md', encoding='utf-8') as f:
 
 setup(
     name='dwd_global_radiation',
-    version='1.0.0rc4',
+    version='1.0.0rc5',
     packages=find_packages(),
     description='Access and analyze DWD global radiation data and forecasts',
     long_description=long_description,
@@ -26,9 +26,9 @@ setup(
     install_requires=[
         'beautifulsoup4>=4.12.3',
         'netCDF4>=1.6.5',
-        'numpy>=1.26.4',
+        'numpy>=1.26.0',
         'pytz>=2024.1',
-        'Requests>=2.31.0',
+        'requests>=2.31.0',
         'tabulate>=0.9.0',
         'tzlocal>=5.2',
         'xarray>=2024.3.0'

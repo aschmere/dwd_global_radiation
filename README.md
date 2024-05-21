@@ -16,14 +16,14 @@ python3 -m pip install dwd_global_radiation
 The listed installation command will usually install all required dependant Python packages.
 As of the current version of this package the following Python packages are required:
 ```
-beautifulsoup4==4.12.3
-netCDF4==1.6.5
-numpy==1.26.4
-pytz==2024.1
-Requests==2.31.0
-tabulate==0.9.0
-tzlocal==5.2
-xarray==2024.3.0
+beautifulsoup4>=4.12.3
+netCDF4>=1.6.5
+numpy>=1.26.0
+pytz>=2024.1
+requests>=2.31.0
+tabulate>=0.9.0
+tzlocal>=5.2
+xarray>=2024.3.0
 ```
 <ins>Note:</ins>The above listed versions of dependant Python packages reflect the versions, on which this package was developed and tested. Typically you would expect, that later versions of these packages will be compatible as well. Earlier versions might also be compatible. The Python version, with which this package
 was developed and tested, is 3.12.3.
