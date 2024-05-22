@@ -365,6 +365,13 @@ class GlobalRadiation:
         # If all checks pass, create and add the new location
         location = Location(latitude, longitude, name)
         self.locations.append(location)
+    def remove_location(self, name):
+        """Removes a location by its name."""
+        for i, location in enumerate(self.locations):
+            if location.name == name:
+                del self.locations[i]
+                return
+        raise ValueError(f"Location with name '{name}' not found")
 
     def _get_grid_data(self, all_grid_global_rad_data):
 
