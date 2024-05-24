@@ -499,7 +499,7 @@ class GlobalRadiation:
         max_hour_age_of_measurement:
         This parameter defines the maximum age in hours, for which
         global radiation measurement data shall be retrieved. The data provided by DWD is not actual
-        measurement data, but full-grid sattelite data. Every 15min a new file is put on the DWD
+        measurement data, but full-grid satellite data. Every 15min a new file is put on the DWD
         servers. The history on the http file share goes back multiple days. As a programmer you
         should adapt the queried history to your needs. If you want to record long term data,
         use this method as a basis for persisting the data into an external database.
@@ -508,6 +508,9 @@ class GlobalRadiation:
         The higher you choose this number, the longer the run time of your fetch operation will be.
         A reasonable default is 3h set by the MAX_AGE_HOURS_OF_GLOBAL_RAD_DATA constant.
         """
+        # Initialize measurements for all locations
+        self.reset_all_measurements()
+
         current_date = datetime.now(dtbase.UTC)
         self.last_measurement_fetch_date = current_date
         matching_files = utils.get_matching_dwd_globalrad_data_files(
@@ -524,6 +527,13 @@ class GlobalRadiation:
                 self.measurement_health_state = 'green'
         for file, file_time in matching_files:
             self.process_file(file, file_time)
+
+    def reset_all_measurements(self):
+        """
+        Reset the measurements for all locations.
+        """
+        for location in self.locations:
+            location.measurements = []
 
     def process_file(self, file, file_time):
         """
@@ -548,7 +558,7 @@ class GlobalRadiation:
         latitude, longitude = location.latitude, location.longitude
         grid_data = self._get_grid_data(all_grid_global_rad_data)
         (nearest_index, nearest_distance, grid_latitude, grid_longitude
-         )= self._get_nearest_grid_point(latitude, longitude, grid_data)
+        )= self._get_nearest_grid_point(latitude, longitude, grid_data)
         measurement = Measurement(grid_latitude, grid_longitude, nearest_distance, nearest_index)
         location.measurements = [measurement]
 
@@ -560,6 +570,7 @@ class GlobalRadiation:
         sis_value = self._get_measurement_value_from_loaded_data(
             all_grid_global_rad_data, measurement.nearest_index)
         measurement.add_measurement_value(file_time.timestamp(), sis_value)
+
     def fetch_forecasts(self):
         """
         Fetches and processes global radiation forecast data for each location stored
@@ -623,4 +634,4 @@ class GlobalRadiation:
                 if timestamp_of_entry > current_date.timestamp():
                     forecast.add_entry(timestamp_of_entry, value)
 
-            location.forecasts.append(forecast)
+            location.forecasts = [forecast]
