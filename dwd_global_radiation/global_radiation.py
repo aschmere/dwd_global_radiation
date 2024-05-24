@@ -54,11 +54,28 @@ class Location:
         ]
         return ", ".join(parts)
 
+    def to_dict(self):
+        """Convert Location to a dictionary."""
+        return {
+            "latitude": float(self.latitude),  # Explicit conversion to float
+            "longitude": float(self.longitude), # Explicit conversion to float
+            "name": self.name,
+            "measurements": [measurement.to_dict() for measurement in self.measurements],
+            "forecasts": [forecast.to_dict() for forecast in self.forecasts]
+        }
+
 @dataclass
 class MeasurementEntry:
     """Class for storing DWD global radiation measurement data."""
     timestamp: float  # assuming timestamp is a Unix time float
     sis: float        # Solar Irradiance in W/m^2
+
+    def to_dict(self):
+        """Convert MeasurementEntry to a dictionary."""
+        return {
+            "timestamp": float(self.timestamp),  # Explicit conversion to float
+            "sis": float(self.sis)               # Explicit conversion to float
+        }
 
 
 @dataclass
@@ -69,7 +86,7 @@ class Measurement:
     grid_longitude: float
     distance: float
     nearest_index: int
-    measurement_values: list = field(default_factory=list)
+    measurement_values: list[MeasurementEntry] = field(default_factory=list)
 
     def __repr__(self):
         measurement_values_count=len(self.measurement_values)
@@ -81,6 +98,16 @@ class Measurement:
                 f"distance={self.distance}, "
                 f"nearest_index={self.nearest_index}, "
                 f"measurement_values=Count: {measurement_values_count})")
+
+    def to_dict(self):
+        """Convert Measurement to a dictionary."""
+        return {
+            "grid_latitude": float(self.grid_latitude),  # Explicit conversion to float
+            "grid_longitude": float(self.grid_longitude), # Explicit conversion to float
+            "distance": float(self.distance),            # Explicit conversion to float
+            "nearest_index": int(self.nearest_index),    # Explicit conversion to int
+            "measurement_values": [entry.to_dict() for entry in self.measurement_values]
+        }
 
     def add_measurement_value(self, timestamp, sis):
         """Method for adding retrieved measurement values as SIS"""
@@ -118,6 +145,17 @@ class Forecast:
             f"metadata=status '{metadata_status}')"
         )
 
+    def to_dict(self):
+        """Convert Forecast to a dictionary."""
+        return {
+            "issuance_time": float(self.issuance_time),  # Explicit conversion to float
+            "grid_latitude": float(self.grid_latitude),  # Explicit conversion to float
+            "grid_longitude": float(self.grid_longitude), # Explicit conversion to float
+            "distance": float(self.distance),            # Explicit conversion to float
+            "entries": [entry.to_dict() for entry in self.entries],
+            "metadata": self.metadata
+        }
+
     def set_metadata(self, standard_name=None, long_name=None, units=None):
         """Function for writing global radiation metadata of the DWD data file"""
         self.metadata["standard_name"] = standard_name
@@ -145,6 +183,13 @@ class ForecastEntry:
 
     timestamp: str
     sis: float
+
+    def to_dict(self):
+        """Convert ForecastEntry to a dictionary."""
+        return {
+            "timestamp": float(self.timestamp),  # Explicit conversion to float
+            "sis": float(self.sis)               # Explicit conversion to float
+        }
 
 @dataclass
 class IndentConfig:
@@ -178,6 +223,18 @@ class GlobalRadiation:
     last_forecast_fetch_date: datetime = None
     measurement_health_state: str = 'green'
     forecast_health_state: str = 'green'
+
+    def to_dict(self):
+        """Convert GlobalRadiation to a dictionary."""
+        return {
+            "locations": [location.to_dict() for location in self.locations],
+            "last_measurement_fetch_date": self.last_measurement_fetch_date.isoformat(
+                ) if self.last_measurement_fetch_date else None,
+            "last_forecast_fetch_date": self.last_forecast_fetch_date.isoformat(
+                ) if self.last_forecast_fetch_date else None,
+            "measurement_health_state": self.measurement_health_state,
+            "forecast_health_state": self.forecast_health_state
+        }
 
     def get_location_by_name(self, name):
         """Returns a location by its name, if exists."""
@@ -382,40 +439,46 @@ class GlobalRadiation:
         return all_grid_global_rad_data, coordinates
 
     def _get_nearest_grid_point(self, latitude, longitude, grid_data):
+        def calculate_candidate_points(lat, lon, lat_res=0.05, lon_res=0.05):
+            lat_min = np.floor(lat / lat_res) * lat_res
+            lon_min = np.floor(lon / lon_res) * lon_res
+            return [
+                (lat_min, lon_min),
+                (lat_min, lon_min + lon_res),
+                (lat_min + lat_res, lon_min),
+                (lat_min + lat_res, lon_min + lon_res)
+            ]
+
+        def find_nearest_point(lat, lon, candidate_points):
+            distances = [
+                utils.haversine(lat, lon, c_lat, c_lon)
+                for c_lat, c_lon in candidate_points
+            ]
+            nearest_idx = np.argmin(distances)
+            return round(distances[nearest_idx], 3), candidate_points[nearest_idx]
+
+        def get_grid_indices(grid_lat, grid_lon, grid_data):
+            lat_var = grid_data.variables["lat"][:]
+            lon_var = grid_data.variables["lon"][:]
+            lat_idx = np.argmin(np.abs(lat_var - grid_lat))
+            lon_idx = np.argmin(np.abs(lon_var - grid_lon))
+            return lat_idx, lon_idx
+
         all_grid_global_rad_data, _ = grid_data
+        candidate_points = calculate_candidate_points(latitude, longitude)
+        nearest_distance, (
+            grid_latitude, grid_longitude) = find_nearest_point(
+                latitude, longitude, candidate_points)
+        lat_index, lon_index = get_grid_indices(
+            grid_latitude, grid_longitude, all_grid_global_rad_data)
 
-        # Calculate approximate indices based on the grid resolution of 0.05
-        lat_res = 0.05
-        lon_res = 0.05
+        return (
+            lat_index * len(all_grid_global_rad_data.variables["lon"][:]) + lon_index,
+            nearest_distance,
+            round(grid_latitude, 2),
+            round(grid_longitude, 2)
+        )
 
-        lat_min = np.floor(latitude / lat_res) * lat_res
-        lon_min = np.floor(longitude / lon_res) * lon_res
-
-        # Four closest grid points to check
-        candidate_points = [
-            (lat_min, lon_min),
-            (lat_min, lon_min + lon_res),
-            (lat_min + lat_res, lon_min),
-            (lat_min + lat_res, lon_min + lon_res)
-        ]
-
-        # Compute distances for the four candidate points
-        distances = [
-            utils.haversine(latitude, longitude, lat, lon)
-            for lat, lon in candidate_points
-        ]
-
-        nearest_index = np.argmin(distances)
-        nearest_distance = round(distances[nearest_index], 3)
-        grid_latitude, grid_longitude = candidate_points[nearest_index]
-
-        # Find the nearest index in the grid data
-        lat_var = all_grid_global_rad_data.variables["lat"][:]
-        lon_var = all_grid_global_rad_data.variables["lon"][:]
-        lat_index = np.argmin(np.abs(lat_var - grid_latitude))
-        lon_index = np.argmin(np.abs(lon_var - grid_longitude))
-
-        return (lat_index * len(lon_var) + lon_index), nearest_distance, round(grid_latitude, 2), round(grid_longitude, 2)
 
     def _get_measurement_value_from_loaded_data(
         self, all_grid_global_rad_data, nearest_index
