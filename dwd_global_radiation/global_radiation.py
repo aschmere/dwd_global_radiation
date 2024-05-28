@@ -21,21 +21,69 @@ The module provides tools to:
 Usage of this module is suitable for applications in environmental science, meteorology, and
 any system requiring precise global radiation data management and representation.
 """
-from dataclasses import dataclass, field
-from datetime import datetime
+
 import datetime as dtbase
-from string import Template
-import tzlocal
-from tabulate import tabulate
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
 import numpy as np
+import tzlocal
 
 from . import utils
+from .global_radiation_printer import (
+    FormatConfig,
+    PrintConfig,
+    get_language_details,
+    print_forecasts,
+    print_header,
+    print_measurements,
+)
+
+# Initialize a logger for this module
+_LOGGER = logging.getLogger(__name__)
 
 MAX_AGE_HOURS_OF_GLOBAL_RAD_DATA = 3
+
+
+@dataclass
+class GlobalForecastData:
+    """
+    Holds global forecast data and its issuance time.
+
+    Attributes:
+        issuance_time (datetime): The timestamp of the last forecast data retrieval.
+        all_grid_forecasts (Any): The cached forecast data.
+    """
+
+    issuance_time: float = None
+    all_grid_forecasts: Any = None  # The actual forecast data cache∏
+
+
+@dataclass
+class GlobalMeasurementData:
+    """
+    Class to store cached global measurement data.
+
+    Attributes:
+        issuance_time (float): Timestamp of the last issuance of measurement data. Initially None.
+        latest_file_time (datetime): The latest file time from the DWD OpenData servers.
+            Initially None.
+        all_grid_measurements (list): List to store arrays of measurement data from multiple files.
+    """
+
+    issuance_time: float = None
+    latest_file_time: datetime = None  # New attribute to store the latest file time
+    all_grid_measurements: list = field(
+        default_factory=list
+    )  # List to store measurement data arrays
+
 
 @dataclass
 class Location:
     """Class for a user-provided location for measurement and forecast data"""
+
     latitude: float
     longitude: float
     name: str
@@ -50,7 +98,7 @@ class Location:
             f"latitude={self.latitude}",
             f"longitude={self.longitude}",
             f"measurements={measurement_count} {'item' if measurement_count == 1 else 'items'}",
-            f"forecasts={forecast_count} {'item' if forecast_count == 1 else 'items'})"
+            f"forecasts={forecast_count} {'item' if forecast_count == 1 else 'items'})",
         ]
         return ", ".join(parts)
 
@@ -58,23 +106,27 @@ class Location:
         """Convert Location to a dictionary."""
         return {
             "latitude": float(self.latitude),  # Explicit conversion to float
-            "longitude": float(self.longitude), # Explicit conversion to float
+            "longitude": float(self.longitude),  # Explicit conversion to float
             "name": self.name,
-            "measurements": [measurement.to_dict() for measurement in self.measurements],
-            "forecasts": [forecast.to_dict() for forecast in self.forecasts]
+            "measurements": [
+                measurement.to_dict() for measurement in self.measurements
+            ],
+            "forecasts": [forecast.to_dict() for forecast in self.forecasts],
         }
+
 
 @dataclass
 class MeasurementEntry:
     """Class for storing DWD global radiation measurement data."""
+
     timestamp: float  # assuming timestamp is a Unix time float
-    sis: float        # Solar Irradiance in W/m^2
+    sis: float  # Solar Irradiance in W/m^2
 
     def to_dict(self):
         """Convert MeasurementEntry to a dictionary."""
         return {
             "timestamp": float(self.timestamp),  # Explicit conversion to float
-            "sis": float(self.sis)               # Explicit conversion to float
+            "sis": float(self.sis),  # Explicit conversion to float
         }
 
 
@@ -82,6 +134,7 @@ class MeasurementEntry:
 class Measurement:
     """Class for hosting various quarterly hour global radiation measurement
     data from DWD servers"""
+
     grid_latitude: float
     grid_longitude: float
     distance: float
@@ -89,33 +142,45 @@ class Measurement:
     measurement_values: list[MeasurementEntry] = field(default_factory=list)
 
     def __repr__(self):
-        measurement_values_count=len(self.measurement_values)
+        measurement_values_count = len(self.measurement_values)
         # Round latitude and longitude to two decimal places
         lat = round(self.grid_latitude, 2) if self.grid_latitude is not None else None
         lon = round(self.grid_longitude, 2) if self.grid_longitude is not None else None
-        return (f"Measurement(grid_latitude={lat}, "
-                f"grid_longitude={lon}, "
-                f"distance={self.distance}, "
-                f"nearest_index={self.nearest_index}, "
-                f"measurement_values=Count: {measurement_values_count})")
+        return (
+            f"Measurement(grid_latitude={lat}, "
+            f"grid_longitude={lon}, "
+            f"distance={self.distance}, "
+            f"nearest_index={self.nearest_index}, "
+            f"measurement_values=Count: {measurement_values_count})"
+        )
 
     def to_dict(self):
         """Convert Measurement to a dictionary."""
         return {
             "grid_latitude": float(self.grid_latitude),  # Explicit conversion to float
-            "grid_longitude": float(self.grid_longitude), # Explicit conversion to float
-            "distance": float(self.distance),            # Explicit conversion to float
-            "nearest_index": int(self.nearest_index),    # Explicit conversion to int
-            "measurement_values": [entry.to_dict() for entry in self.measurement_values]
+            "grid_longitude": float(
+                self.grid_longitude
+            ),  # Explicit conversion to float
+            "distance": float(self.distance),  # Explicit conversion to float
+            "nearest_index": int(self.nearest_index),  # Explicit conversion to int
+            "measurement_values": [
+                entry.to_dict() for entry in self.measurement_values
+            ],
         }
 
     def add_measurement_value(self, timestamp, sis):
-        """Method for adding retrieved measurement values as SIS"""
-        self.measurement_values.append(MeasurementEntry(timestamp, sis))
+        """Method for adding retrieved measurement values as SIS."""
+        if not any(entry.timestamp == timestamp for entry in self.measurement_values):
+            self.measurement_values.append(MeasurementEntry(timestamp, sis))
+        else:
+            _LOGGER.warning(
+                "Duplicate timestamp %s found. Measurement value not added.", timestamp
+            )
 
     def get_measurement_values(self):
         """Method to retrieve all measurement values"""
         return self.measurement_values
+
 
 @dataclass
 class Forecast:
@@ -126,13 +191,19 @@ class Forecast:
     grid_longitude: float = None
     distance: float = None
     entries: list = field(default_factory=list)
-    metadata: dict = field(default_factory=
-                           lambda: {"standard_name": None, "long_name": None, "units": None})
+    metadata: dict = field(
+        default_factory=lambda: {
+            "standard_name": None,
+            "long_name": None,
+            "units": None,
+        }
+    )
 
     def __repr__(self):
         entries_count = len(self.entries)
         metadata_status = (
-            "populated" if any(value is not None for value in self.metadata.values())
+            "populated"
+            if any(value is not None for value in self.metadata.values())
             else "empty"
         )
         # Round latitude and longitude to two decimal places
@@ -150,10 +221,12 @@ class Forecast:
         return {
             "issuance_time": float(self.issuance_time),  # Explicit conversion to float
             "grid_latitude": float(self.grid_latitude),  # Explicit conversion to float
-            "grid_longitude": float(self.grid_longitude), # Explicit conversion to float
-            "distance": float(self.distance),            # Explicit conversion to float
+            "grid_longitude": float(
+                self.grid_longitude
+            ),  # Explicit conversion to float
+            "distance": float(self.distance),  # Explicit conversion to float
             "entries": [entry.to_dict() for entry in self.entries],
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
     def set_metadata(self, standard_name=None, long_name=None, units=None):
@@ -177,6 +250,7 @@ class Forecast:
         entry = ForecastEntry(timestamp, sis)
         self.entries.append(entry)
 
+
 @dataclass
 class ForecastEntry:
     """Class for storing DWD global radiation forecast data"""
@@ -188,29 +262,8 @@ class ForecastEntry:
         """Convert ForecastEntry to a dictionary."""
         return {
             "timestamp": float(self.timestamp),  # Explicit conversion to float
-            "sis": float(self.sis)               # Explicit conversion to float
+            "sis": float(self.sis),  # Explicit conversion to float
         }
-
-@dataclass
-class IndentConfig:
-    """Handles indentation settings for pretty-printing data outputs."""
-    indent: str = "     "
-    sub_indent: str = "        "
-
-@dataclass
-class FormatConfig:
-    """Encapsulates formatting details such as date/time format and local timezone."""
-    dt_format: str
-    local_tz: str
-
-@dataclass
-class PrintConfig:
-    """ Class for setting configuration parameters for the global radiation print service."""
-
-    labels: dict
-    format_config: FormatConfig
-    indent_config: IndentConfig = field(default_factory=IndentConfig)
-
 @dataclass
 class GlobalRadiation:
     """This is the main class of the DWD Global Radiation Observation and Forecast Data Library
@@ -221,19 +274,29 @@ class GlobalRadiation:
     locations: list = field(default_factory=list)
     last_measurement_fetch_date: datetime = None
     last_forecast_fetch_date: datetime = None
-    measurement_health_state: str = 'green'
-    forecast_health_state: str = 'green'
+    measurement_health_state: str = "green"
+    forecast_health_state: str = "green"
+    forecast_data: GlobalForecastData = field(default_factory=GlobalForecastData)
+    measurement_data: GlobalMeasurementData = field(
+        default_factory=GlobalMeasurementData
+    )
 
     def to_dict(self):
         """Convert GlobalRadiation to a dictionary."""
         return {
             "locations": [location.to_dict() for location in self.locations],
-            "last_measurement_fetch_date": self.last_measurement_fetch_date.isoformat(
-                ) if self.last_measurement_fetch_date else None,
-            "last_forecast_fetch_date": self.last_forecast_fetch_date.isoformat(
-                ) if self.last_forecast_fetch_date else None,
+            "last_measurement_fetch_date": (
+                self.last_measurement_fetch_date.isoformat()
+                if self.last_measurement_fetch_date
+                else None
+            ),
+            "last_forecast_fetch_date": (
+                self.last_forecast_fetch_date.isoformat()
+                if self.last_forecast_fetch_date
+                else None
+            ),
             "measurement_health_state": self.measurement_health_state,
-            "forecast_health_state": self.forecast_health_state
+            "forecast_health_state": self.forecast_health_state,
         }
 
     def get_location_by_name(self, name):
@@ -245,18 +308,14 @@ class GlobalRadiation:
 
     def print_data(self, language="English"):
         """
-        Function for printing the data of the GlobalRadiation class and its subclasses
-
-        This method provides a comprehensive print service to output all the retrieved
-        global radiation forecast and measurement data from the queried DWD datasets.
-        The default output language is English, but another supported language is German
+        Function for printing the data of the GlobalRadiation class and its subclasses.
         """
         local_tz = tzlocal.get_localzone()
-        title, labels, dt_format = self._get_language_details(language)
+        title, labels, dt_format = get_language_details(language)
         format_config = FormatConfig(dt_format=dt_format, local_tz=local_tz)
         config = PrintConfig(labels=labels, format_config=format_config)
 
-        self._print_header(title)
+        print_header(title)
         for location in self.locations:
             print(f"{config.labels['location']}: {location.name}")
             print(f"{config.indent_config.indent}{config.labels['latitude']}: {location.latitude}")
@@ -264,138 +323,9 @@ class GlobalRadiation:
                 f"{config.indent_config.indent}{config.labels['longitude']}: {location.longitude}")
 
             if location.measurements:
-                self._print_measurements(location.measurements, config)
+                print_measurements(location.measurements, config)
             if location.forecasts:
-                self._print_forecasts(location.forecasts, config)
-
-    def _get_language_details(self, language):
-        if language == "German":
-            title = "DWD Vorhersage- und Beobachtungsdaten ausgewählter Standorte"
-            labels = {
-                "location": "Ort",
-                "latitude": "Breitengrad",
-                "longitude": "Längengrad",
-                "measurements": "Messungen",
-                "timestamp": "Zeitstempel",
-                "sis": "SIS Wert in W/m2",
-                "grid_latitude": "Rasterbreitengrad",
-                "grid_longitude": "Rasterlängengrad",
-                "distance": "Entfernung der Lokation zum nächsten Gridpunkt in km",
-                "forecasts": "Prognosen",
-                "issuance_time": "Ausgabezeit",
-                "metadata": "Metadaten",
-                "entries": "Einträge",
-            }
-            dt_format = "%d.%m.%Y %H:%M:%S"
-        else:
-            title = "DWD Forecast and Observation Data from Selected Locations"
-            labels = {
-                "location": "Location",
-                "latitude": "Latitude",
-                "longitude": "Longitude",
-                "measurements": "Measurements",
-                "timestamp": "Timestamp",
-                "sis": "SIS Value in W/m2",
-                "grid_latitude": "Grid Latitude",
-                "grid_longitude": "Grid Longitude",
-                "distance": "Distance of the location to the nearest gridpoint in km",
-                "forecasts": "Forecasts",
-                "issuance_time": "Issuance Time",
-                "metadata": "Metadata",
-                "entries": "Entries",
-            }
-            dt_format = "%Y-%m-%d %H:%M:%S"
-
-        return title, labels, dt_format
-
-    def _print_header(self, title):
-        print("=" * len(title))
-        print(title)
-        print("=" * len(title))
-
-    def _print_measurements(self, measurements, config):
-        print(f"{config.indent_config.indent}{config.labels['measurements']}:")
-        for measurement in measurements:
-            self._print_single_measurement(measurement, config)
-
-    def _print_forecasts(self, forecasts, config):
-        print(f"{config.indent_config.indent}{config.labels['forecasts']}:")
-        for forecast in forecasts:
-            self._print_single_forecast(forecast, config)
-
-    def _print_single_measurement(self, measurement, config):
-        """
-        Prints a single measurement, utilizing the PrintConfig object to access
-        necessary configuration like labels, date format, and additional indentation.
-        """
-        output = Template(
-            f"{config.indent_config.sub_indent}{config.labels['grid_latitude']}: $grid_latitude\n"
-            f"{config.indent_config.sub_indent}{config.labels['grid_longitude']}: $grid_longitude\n"
-            f"{config.indent_config.sub_indent}{config.labels['distance']}: $distance"
-        ).substitute(
-            grid_latitude=measurement.grid_latitude,
-            grid_longitude=measurement.grid_longitude,
-            distance=measurement.distance,
-        )
-        print(output)
-        if measurement.measurement_values:
-            self._print_tabulated_data(measurement.measurement_values, config)
-
-    def _print_tabulated_data(self, data_entries, config):
-        """
-        Prints data entries (either forecast entries or measurement values) in a tabulated format,
-        utilizing the PrintConfig object for formatting details such as labels, date format,
-        and additional indentation.
-        """
-        table = [
-            [
-                datetime.fromtimestamp(
-                    entry.timestamp, config.format_config.local_tz).strftime(
-                        config.format_config.dt_format),
-                entry.sis  # Now consistently using `sis` for both measurements and forecasts
-            ]
-            for entry in data_entries
-        ]
-
-        table_output = tabulate(
-            table,
-            headers=[config.labels["timestamp"], config.labels["sis"]],
-            tablefmt="grid"
-        )
-
-        table_output = "\n".join(
-            [f"{config.indent_config.sub_indent}{line}" for line in table_output.splitlines()]
-        )
-
-        print(table_output)
-
-    def _print_single_forecast(self, forecast, config):
-        """
-        Prints a single forecast, utilizing the PrintConfig object to access necessary
-        configuration like labels, date format, and additional indentation.
-        """
-        issuance_time = datetime.fromtimestamp(
-            forecast.issuance_time, config.format_config.local_tz
-        ).strftime(config.format_config.dt_format)
-
-        output = Template(
-            f"{config.indent_config.sub_indent}{config.labels['issuance_time']}: $issuance_time\n"
-            f"{config.indent_config.sub_indent}{config.labels['grid_latitude']}: $grid_latitude\n"
-            f"{config.indent_config.sub_indent}{config.labels['grid_longitude']}: $grid_longitude\n"
-            f"{config.indent_config.sub_indent}{config.labels['distance']}: $distance\n"
-            f"{config.indent_config.sub_indent}{config.labels['metadata']}: $metadata"
-        ).substitute(
-            issuance_time=issuance_time,
-            grid_latitude=forecast.grid_latitude,
-            grid_longitude=forecast.grid_longitude,
-            distance=forecast.distance,
-            metadata=forecast.metadata,
-        )
-        print(output)
-
-        if forecast.entries:
-            self._print_tabulated_data(forecast.entries, config)
-
+                print_forecasts(location.forecasts, config)
 
     def add_location(self, *, latitude=None, longitude=None, name=None):
         """
@@ -422,6 +352,7 @@ class GlobalRadiation:
         # If all checks pass, create and add the new location
         location = Location(latitude, longitude, name)
         self.locations.append(location)
+
     def remove_location(self, name):
         """Removes a location by its name."""
         for i, location in enumerate(self.locations):
@@ -446,7 +377,7 @@ class GlobalRadiation:
                 (lat_min, lon_min),
                 (lat_min, lon_min + lon_res),
                 (lat_min + lat_res, lon_min),
-                (lat_min + lat_res, lon_min + lon_res)
+                (lat_min + lat_res, lon_min + lon_res),
             ]
 
         def find_nearest_point(lat, lon, candidate_points):
@@ -466,19 +397,19 @@ class GlobalRadiation:
 
         all_grid_global_rad_data, _ = grid_data
         candidate_points = calculate_candidate_points(latitude, longitude)
-        nearest_distance, (
-            grid_latitude, grid_longitude) = find_nearest_point(
-                latitude, longitude, candidate_points)
+        nearest_distance, (grid_latitude, grid_longitude) = find_nearest_point(
+            latitude, longitude, candidate_points
+        )
         lat_index, lon_index = get_grid_indices(
-            grid_latitude, grid_longitude, all_grid_global_rad_data)
+            grid_latitude, grid_longitude, all_grid_global_rad_data
+        )
 
         return (
             lat_index * len(all_grid_global_rad_data.variables["lon"][:]) + lon_index,
             nearest_distance,
             round(grid_latitude, 2),
-            round(grid_longitude, 2)
+            round(grid_longitude, 2),
         )
-
 
     def _get_measurement_value_from_loaded_data(
         self, all_grid_global_rad_data, nearest_index
@@ -488,45 +419,109 @@ class GlobalRadiation:
         measurement_value = all_grid_global_rad_data.variables["SIS"][:][
             0, lat_index, lon_index
         ]
-        return measurement_value
+        units_string = all_grid_global_rad_data.variables["time"].units
+        time_value = all_grid_global_rad_data.variables["time"][0].data.item()
+
+        # Parse the base date from the units string and set it to UTC
+        base_date_str = units_string.split(" since ")[1]
+        base_date = datetime.strptime(base_date_str, "%Y-%m-%d %H:%M:%S")
+
+        # Ensure the base_date is in UTC
+        base_date = base_date.replace(tzinfo=timezone.utc)
+
+        # Convert the base date to a timestamp
+        base_timestamp = base_date.timestamp()
+
+        # Add the time value to the base timestamp
+        real_timestamp = base_timestamp + time_value
+
+        return real_timestamp, measurement_value
 
     def fetch_measurements(
-        self, max_hour_age_of_measurement: int = MAX_AGE_HOURS_OF_GLOBAL_RAD_DATA):
+        self, max_hour_age_of_measurement: int = MAX_AGE_HOURS_OF_GLOBAL_RAD_DATA
+    ):
         """
-        This method fetches DWD Global Radiation data from DWD OpenData servers.
+        Fetches DWD Global Radiation data from DWD OpenData servers.
 
         Parameters:
         max_hour_age_of_measurement:
-        This parameter defines the maximum age in hours, for which
-        global radiation measurement data shall be retrieved. The data provided by DWD is not actual
-        measurement data, but full-grid satellite data. Every 15min a new file is put on the DWD
-        servers. The history on the http file share goes back multiple days. As a programmer you
-        should adapt the queried history to your needs. If you want to record long term data,
-        use this method as a basis for persisting the data into an external database.
-        Use this parameter with caution, with every added hour 4 more full-grid files
-        have to be downloaded and analyzed.
-        The higher you choose this number, the longer the run time of your fetch operation will be.
-        A reasonable default is 3h set by the MAX_AGE_HOURS_OF_GLOBAL_RAD_DATA constant.
+            Defines the maximum age in hours for which global radiation measurement data
+            shall be retrieved. The data provided by DWD is not actual measurement data, but
+            full-grid satellite data. Every 15 minutes a new file is put on the DWD servers.
+            The history on the HTTP file share goes back multiple days. As a programmer,
+            you should adapt the queried history to your needs. If you want to record
+            long-term data, use this method as a basis for persisting the data into an
+            external database. Use this parameter with caution; with every added hour,
+            4 more full-grid files have to be downloaded and analyzed. The higher you choose
+            this number, the longer the run time of your fetch operation will be.
+            A reasonable default is 3h set by the MAX_AGE_HOURS_OF_GLOBAL_RAD_DATA constant.
         """
-        # Initialize measurements for all locations
-        self.reset_all_measurements()
-
-        current_date = datetime.now(dtbase.UTC)
+        current_date = datetime.now(timezone.utc)
         self.last_measurement_fetch_date = current_date
-        matching_files = utils.get_matching_dwd_globalrad_data_files(
-            current_date, max_hour_age_of_measurement)
-        # Implementing measurement health check
-        if not matching_files:
-            self.measurement_health_state = 'red'
+
+        # Check if cached data is older than 15 minutes
+        if self.measurement_data.issuance_time and (
+            (current_date.timestamp() - self.measurement_data.issuance_time)
+            < timedelta(minutes=15).total_seconds()
+        ):
+            use_cached_data = True
         else:
-            # Check if the most recent file_time is more than 1 hour behind current_date
+            matching_files = utils.get_matching_dwd_globalrad_data_files(
+                current_date, max_hour_age_of_measurement
+            )
+
+            # Implementing measurement health check
+            if not matching_files:
+                self.measurement_health_state = "red"
+                _LOGGER.warning(
+                    "No matching files found. Setting measurement health state to red."
+                )
+                return
+
             latest_file_time = max(file_time for _, file_time in matching_files)
             if (current_date - latest_file_time).total_seconds() > 3600:
-                self.measurement_health_state = 'yellow'
+                self.measurement_health_state = "yellow"
             else:
-                self.measurement_health_state = 'green'
-        for file, file_time in matching_files:
-            self.process_file(file, file_time)
+                self.measurement_health_state = "green"
+
+            # Check if the server data is newer than the cached data
+            use_cached_data = (
+                self.measurement_data.latest_file_time
+                and self.measurement_data.latest_file_time >= latest_file_time
+            )
+
+        if use_cached_data:
+            _LOGGER.info(
+                "Using cached measurement data as it is less than 15 minutes old or server data "
+                "is not newer."
+            )
+            self.process_measurements(
+                self.measurement_data.all_grid_measurements, is_cached=True
+            )
+        else:
+            self.reset_all_measurements()
+            self.measurement_data = GlobalMeasurementData()  # Reset the cache
+
+            # Process each file
+            for file, _ in matching_files:  # file_time is no longer needed
+                all_grid_global_rad_data = utils.load_sis_data(file)
+                self.measurement_data.all_grid_measurements.append(
+                    all_grid_global_rad_data
+                )
+                current_issuance_time = (
+                    utils.get_measurement_timestamp_from_netcdf_history_attrib(
+                        all_grid_global_rad_data.history
+                    )
+                )
+
+                # Update cached issuance time and latest file time if they are newer
+                if (self.measurement_data.issuance_time is None) or (
+                    current_issuance_time > self.measurement_data.issuance_time
+                ):
+                    self.measurement_data.issuance_time = current_issuance_time
+                    self.measurement_data.latest_file_time = latest_file_time
+
+                self.process_measurements([all_grid_global_rad_data], is_cached=False)
 
     def reset_all_measurements(self):
         """
@@ -535,21 +530,23 @@ class GlobalRadiation:
         for location in self.locations:
             location.measurements = []
 
-    def process_file(self, file, file_time):
+    def process_measurements(self, all_grid_measurements, is_cached):
         """
-        Process each data file for all locations.
+        Process measurement data for all locations.
         """
-        all_grid_global_rad_data = utils.load_sis_data(file)
-        for location in self.locations:
-            self.process_location(location, all_grid_global_rad_data, file_time)
+        for all_grid_global_rad_data in all_grid_measurements:
+            for location in self.locations:
+                if is_cached and location.measurements:
+                    continue  # Do not overwrite existing measurements with cached data
+                self.process_location(location, all_grid_global_rad_data)
 
-    def process_location(self, location, all_grid_global_rad_data, file_time):
+    def process_location(self, location, all_grid_global_rad_data):
         """
         Process each location to handle its measurement updates.
         """
         if not location.measurements:
             self.initialize_measurement_for_location(location, all_grid_global_rad_data)
-        self.update_measurement_for_location(location, all_grid_global_rad_data, file_time)
+        self.update_measurement_for_location(location, all_grid_global_rad_data)
 
     def initialize_measurement_for_location(self, location, all_grid_global_rad_data):
         """
@@ -557,19 +554,23 @@ class GlobalRadiation:
         """
         latitude, longitude = location.latitude, location.longitude
         grid_data = self._get_grid_data(all_grid_global_rad_data)
-        (nearest_index, nearest_distance, grid_latitude, grid_longitude
-        )= self._get_nearest_grid_point(latitude, longitude, grid_data)
-        measurement = Measurement(grid_latitude, grid_longitude, nearest_distance, nearest_index)
+        (nearest_index, nearest_distance, grid_latitude, grid_longitude) = (
+            self._get_nearest_grid_point(latitude, longitude, grid_data)
+        )
+        measurement = Measurement(
+            grid_latitude, grid_longitude, nearest_distance, nearest_index
+        )
         location.measurements = [measurement]
 
-    def update_measurement_for_location(self, location, all_grid_global_rad_data, file_time):
+    def update_measurement_for_location(self, location, all_grid_global_rad_data):
         """
         Updates the measurement for a given location.
         """
         measurement = location.measurements[0]
-        sis_value = self._get_measurement_value_from_loaded_data(
-            all_grid_global_rad_data, measurement.nearest_index)
-        measurement.add_measurement_value(file_time.timestamp(), sis_value)
+        timestamp, sis_value = self._get_measurement_value_from_loaded_data(
+            all_grid_global_rad_data, measurement.nearest_index
+        )
+        measurement.add_measurement_value(timestamp, sis_value)
 
     def fetch_forecasts(self):
         """
@@ -588,20 +589,51 @@ class GlobalRadiation:
         the current timestamp.
         """
         current_date = datetime.now(dtbase.UTC)
-        self.last_forecast_fetch_date = current_date
-        all_grid_forecasts, _actualhoursbehind = utils.load_forecast_dataset(
-            current_date
-        )
-        # Check forecast data availability and timeliness
-        if utils.is_dataset_empty(all_grid_forecasts):
-            self.forecast_health_state = 'red'
-            return  # Stop processing as no data is available
 
-        # Check the timeliness of the data
-        if _actualhoursbehind > 1:
-            self.forecast_health_state = 'yellow'
+        # Check if we need to fetch new forecasts
+        if (
+            self.forecast_data.issuance_time
+            and (current_date.timestamp() - self.forecast_data.issuance_time)
+            < timedelta(hours=1).total_seconds()
+        ):
+            _LOGGER.info("Using cached forecast data as it is less than 1 hour old.")
+            all_grid_forecasts = self.forecast_data.all_grid_forecasts
         else:
-            self.forecast_health_state = 'green'
+            self.last_forecast_fetch_date = current_date
+            all_grid_forecasts, _actualhoursbehind = utils.load_forecast_dataset(
+                current_date
+            )
+
+            # Check forecast data availability and timeliness
+            if utils.is_dataset_empty(all_grid_forecasts):
+                self.forecast_health_state = "red"
+                _LOGGER.warning(
+                    "Forecast data is empty. Setting forecast health state to red."
+                )
+                return  # Stop processing as no data is available
+
+            # Check the timeliness of the data
+            if _actualhoursbehind > 1:
+                self.forecast_health_state = "yellow"
+                _LOGGER.warning(
+                    "Forecast data is %s hours behind. "
+                    "Setting forecast health state to yellow.",
+                    _actualhoursbehind,
+                )
+            else:
+                self.forecast_health_state = "green"
+                _LOGGER.info(
+                    "Forecast data is up to date. Setting forecast health state to green."
+                )
+
+            # Update the cached forecast data
+            global_issuance_time = (
+                utils.get_forecast_issuance_timestamp_from_netcdf_history_attrib(
+                    all_grid_forecasts.history
+                )
+            )
+            self.forecast_data.issuance_time = global_issuance_time
+            self.forecast_data.all_grid_forecasts = all_grid_forecasts
 
         for location in self.locations:
             latitude = location.latitude

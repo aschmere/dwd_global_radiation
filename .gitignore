@@ -8,3 +8,4 @@ dist
 dwd_global_radiation.egg-info
 build
 .hidden
+global_radiation.log

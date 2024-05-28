@@ -37,6 +37,16 @@ and displaying radiation data.
 import sys
 import configparser
 import time  # Import the time module
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,  # Set the logging level
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Set the log message format
+    handlers=[
+        logging.StreamHandler(),  # Log to standard output (console)
+        logging.FileHandler('global_radiation.log'),  # Additionally log to a file
+    ]
+)
 
 def read_configurations_from_file(file_path):
     """See module docstring for further information"""
@@ -81,7 +91,9 @@ if __name__ == '__main__':
         objGlobalRadiation.add_location(latitude=lat, longitude=lon, name=loc_name)
 
     objGlobalRadiation.fetch_forecasts()
+    objGlobalRadiation.fetch_forecasts() #test caching
     objGlobalRadiation.fetch_measurements(max_hour_age_of_measurement=1)
+    objGlobalRadiation.fetch_measurements(max_hour_age_of_measurement=1) #test caching
 
     objGlobalRadiation.print_data(language="German")
 

@@ -1,4 +1,5 @@
 """Module providing helper functions for the dwd-global-radiation main module"""
+
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 import calendar
@@ -8,14 +9,19 @@ import requests
 import numpy as np
 import xarray as xr
 from bs4 import BeautifulSoup
+
 # pylint: disable=no-name-in-module
 from netCDF4 import Dataset
+
 # pylint: enable=no-name-in-module
 import pytz
 
-MAX_HOURS_TO_GO_BACK=10
-HOURLY_MINUTE_TO_FETCH_NEW_FILE=15
-DWD_GLOBAL_RAD_DATA_BASE_URL='https://opendata.dwd.de/weather/satellite/radiation/sis/'
+MAX_HOURS_TO_GO_BACK = 10
+HOURLY_MINUTE_TO_FETCH_NEW_FILE = 15
+DWD_GLOBAL_RAD_DATA_BASE_URL = (
+    "https://opendata.dwd.de/weather/satellite/radiation/sis/"
+)
+
 
 @dataclass
 class FileParsingContext:
@@ -41,12 +47,14 @@ class FileParsingContext:
     `process_line`. It helps streamline the passage of multiple related parameters between
     these functions and simplifies managing their state.
     """
+
     regex_pattern: str
     regex_pattern_measurement_time: str
     current_utc_date: datetime
     max_age_hours: int
     file_links: list
     file_times: list
+
 
 def get_current_solar_radiation_forecast_url(hourstogoback, current_date):
     """
@@ -74,49 +82,64 @@ def get_current_solar_radiation_forecast_url(hourstogoback, current_date):
     or year at midnight. The URL follows a specific pattern to match the directory and file
     structure on the DWD OpenData server.
     """
-    target_date=current_date - timedelta(hours=hourstogoback)
-    target_year=target_date.year
-    target_month=target_date.month
-    target_day=target_date.day
-    target_hour=target_date.hour
-    target_minute=target_date.minute
+    target_date = current_date - timedelta(hours=hourstogoback)
+    target_year = target_date.year
+    target_month = target_date.month
+    target_day = target_date.day
+    target_hour = target_date.hour
+    target_minute = target_date.minute
 
-    if (target_month == 1 and target_day == 1 and target_hour == 0 and
-        target_minute < HOURLY_MINUTE_TO_FETCH_NEW_FILE):
-        target_year= target_year - 1
-        target_month=12
-        target_day=31
-        target_hour=23
-    elif target_day == 1 and target_hour == 0 and target_minute < HOURLY_MINUTE_TO_FETCH_NEW_FILE:
-        target_month=target_month -1
-        target_hour=23
-        if target_month in [1,3,5,7,8,10,12]:
-            target_day=31
-        elif target_month in [4,6,9,11]:
-            target_day=30
+    if (
+        target_month == 1
+        and target_day == 1
+        and target_hour == 0
+        and target_minute < HOURLY_MINUTE_TO_FETCH_NEW_FILE
+    ):
+        target_year = target_year - 1
+        target_month = 12
+        target_day = 31
+        target_hour = 23
+    elif (
+        target_day == 1
+        and target_hour == 0
+        and target_minute < HOURLY_MINUTE_TO_FETCH_NEW_FILE
+    ):
+        target_month = target_month - 1
+        target_hour = 23
+        if target_month in [1, 3, 5, 7, 8, 10, 12]:
+            target_day = 31
+        elif target_month in [4, 6, 9, 11]:
+            target_day = 30
         else:
             if calendar.is_leap():
-                target_day=29
+                target_day = 29
             else:
-                target_day=28
+                target_day = 28
     elif target_hour == 0 and target_minute < HOURLY_MINUTE_TO_FETCH_NEW_FILE:
         target_day = target_day - 1
-        target_hour=23
+        target_hour = 23
     elif target_minute < HOURLY_MINUTE_TO_FETCH_NEW_FILE:
-        target_hour=target_hour - 1
+        target_hour = target_hour - 1
 
-    str_target_year=str(target_year)
-    str_target_month=f"{target_month:02d}"
-    str_target_day=f"{target_day:02d}"
-    str_target_hour=f"{target_hour:02d}"
+    str_target_year = str(target_year)
+    str_target_month = f"{target_month:02d}"
+    str_target_day = f"{target_day:02d}"
+    str_target_hour = f"{target_hour:02d}"
 
-    base_url='https://opendata.dwd.de/weather/satellite/radiation/sis/SISfc'
-    url_suffix='_fc%2B18h-DE.nc#mode=bytes'
+    base_url = "https://opendata.dwd.de/weather/satellite/radiation/sis/SISfc"
+    url_suffix = "_fc%2B18h-DE.nc#mode=bytes"
 
-    url = (base_url + str_target_year + str_target_month + str_target_day +
-           str_target_hour + url_suffix)
+    url = (
+        base_url
+        + str_target_year
+        + str_target_month
+        + str_target_day
+        + str_target_hour
+        + url_suffix
+    )
 
     return url
+
 
 def haversine(lat1, lon1, lat2, lon2):
     """
@@ -158,10 +181,11 @@ def haversine(lat1, lon1, lat2, lon2):
     dlat = lat2 - lat1
 
     # Haversine-Formel
-    a = np.sin(dlat/2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2.0)**2
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     distance = r * c
     return distance
+
 
 def load_forecast_dataset(current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BACK):
     """
@@ -198,6 +222,7 @@ def load_forecast_dataset(current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BAC
 
     return None, None
 
+
 def get_forecast_issuance_timestamp_from_netcdf_history_attrib(history):
     """
     Extracts the forecast issuance timestamp from the 'history' attribute of a NetCDF file,
@@ -223,9 +248,9 @@ def get_forecast_issuance_timestamp_from_netcdf_history_attrib(history):
         then to a UNIX timestamp. This timestamp can be used to reference the exact time of the
         forecast's issuance in systems that use UNIX time for scheduling or data alignment.
     """
-    pattern = r'(\d{4}-\d{2}-\d{2},\d{2}:\d{2})'
+    pattern = r"(\d{4}-\d{2}-\d{2},\d{2}:\d{2})"
     match = re.search(pattern, history)
-    dt_object = datetime.strptime(match[0], '%Y-%m-%d,%H:%M')
+    dt_object = datetime.strptime(match[0], "%Y-%m-%d,%H:%M")
     # Setzen der Zeitzone auf UTC
     dt_object_utc = dt_object.replace(tzinfo=timezone.utc)
 
@@ -233,6 +258,49 @@ def get_forecast_issuance_timestamp_from_netcdf_history_attrib(history):
     timestamp = dt_object_utc.timestamp()
 
     return timestamp
+
+
+def get_measurement_timestamp_from_netcdf_history_attrib(history):
+    """
+    Extracts the measurement timestamp from the 'history' attribute of a NetCDF file,
+    which is formatted as 'Mon May 27 16:03:17 2024', and converts it to a UNIX timestamp.
+
+    Parameters:
+        history (str): The 'history' attribute string from a NetCDF file which includes
+                       detailed information about the file's creation and processing steps.
+                       The date-time information is embedded in this string and formatted as
+                       'Mon May 27 16:03:17 2024'.
+
+    Returns:
+        float: The UNIX timestamp representing the UTC time of the measurement.
+
+    Example:
+        history = "Mon May 27 16:03:17 2024: cdo -selvar,SIS -sellonlatbox,5,16,46,57 ..."
+        timestamp = get_measurement_timestamp_from_netcdf_history_attrib(history)
+        print(timestamp)  # Outputs the UNIX timestamp for 'Mon May 27 16:03:17 2024' UTC
+
+    Notes:
+        The function assumes that the history attribute contains a date-time string formatted
+        as 'Mon May 27 16:03:17 2024'. It converts this to a datetime object in UTC and then
+        to a UNIX timestamp. This timestamp can be used to reference the exact time of the
+        measurement in systems that use UNIX time for scheduling or data alignment.
+    """
+    pattern = r"\b\w{3}\s\d{2}\s\d{2}:\d{2}:\d{2}\s\d{4}\b"
+    match = re.search(pattern, history)
+
+    if not match:
+        raise ValueError("No valid timestamp found in history attribute")
+
+    # Parse the matched string to a datetime object
+    dt_object = datetime.strptime(match.group(), "%b %d %H:%M:%S %Y")
+    # Set the timezone to UTC
+    dt_object_utc = dt_object.replace(tzinfo=timezone.utc)
+
+    # Convert the datetime object to a Unix timestamp
+    timestamp = dt_object_utc.timestamp()
+
+    return timestamp
+
 
 def get_matching_dwd_globalrad_data_files(current_utc_date=None, max_age_hours=None):
     """
@@ -266,8 +334,8 @@ def get_matching_dwd_globalrad_data_files(current_utc_date=None, max_age_hours=N
         a context object (`FileParsingContext`) to pass state across helper functions for better
         modularity and readability.
     """
-    regex_pattern = r'^SISin\d{12}DEv3\.nc$'
-    regex_pattern_measurement_time = r'SISin(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})DEv3\.nc'
+    regex_pattern = r"^SISin\d{12}DEv3\.nc$"
+    regex_pattern_measurement_time = r"SISin(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})DEv3\.nc"
     response = requests.get(DWD_GLOBAL_RAD_DATA_BASE_URL, timeout=(10, 10))
     if response.status_code == 200:
         context = FileParsingContext(
@@ -276,15 +344,18 @@ def get_matching_dwd_globalrad_data_files(current_utc_date=None, max_age_hours=N
             current_utc_date,
             max_age_hours,
             [],
-            []
+            [],
         )
         file_links, file_times = process_response_content(response.content, context)
         if file_links:
-            sorted_files = sorted(zip(file_links, file_times), key=lambda x: x[1], reverse=True)
+            sorted_files = sorted(
+                zip(file_links, file_times), key=lambda x: x[1], reverse=True
+            )
             return sorted_files
         return []
     print("Error:", response.status_code)
     return []
+
 
 def process_response_content(content, context):
     """
@@ -303,12 +374,13 @@ def process_response_content(content, context):
                both of which meet the specified criteria within the context object.
     """
 
-    soup = BeautifulSoup(content, 'html.parser')
-    pre_tags = soup.find_all('pre')
+    soup = BeautifulSoup(content, "html.parser")
+    pre_tags = soup.find_all("pre")
     for pre_tag in pre_tags:
         pre_text = pre_tag.get_text()
         parse_pre_text(pre_text, context)
     return context.file_links, context.file_times
+
 
 def parse_pre_text(pre_text, context):
     """
@@ -320,9 +392,10 @@ def parse_pre_text(pre_text, context):
         context (FileParsingContext): The context object carrying regex patterns, date-time info,
                                       and storage for valid file links and timestamps.
     """
-    lines = pre_text.strip().split('\n')
+    lines = pre_text.strip().split("\n")
     for line in lines:
         process_line(line, context)
+
 
 def process_line(line, context):
     """
@@ -342,7 +415,7 @@ def process_line(line, context):
               and relevancy as per the defined criteria.
     """
     parts = line.strip().split()
-    if len(parts) < 3 or parts[0].endswith('/'):
+    if len(parts) < 3 or parts[0].endswith("/"):
         return
     href = parts[0]
     if not re.match(context.regex_pattern, href):
@@ -351,13 +424,16 @@ def process_line(line, context):
         match = re.match(context.regex_pattern_measurement_time, href)
         year, month, day, hour, minute = map(int, match.groups())
         utc_file_date = datetime(year, month, day, hour, minute, tzinfo=pytz.UTC)
-        if context.max_age_hours is not None and (context.current_utc_date - utc_file_date >
-                                                  timedelta(hours=context.max_age_hours)):
+        if context.max_age_hours is not None and (
+            context.current_utc_date - utc_file_date
+            > timedelta(hours=context.max_age_hours)
+        ):
             return
         context.file_links.append(href)
         context.file_times.append(utc_file_date)
     except (ValueError, AttributeError):
         pass  # Ignore lines that do not have a valid date/time format
+
 
 def load_sis_data(filename):
     """
@@ -385,10 +461,11 @@ def load_sis_data(filename):
         The `url_suffix` is used to specify that the data should be accessed in byte mode,
         which is necessary for certain types of binary data files.
     """
-    url_suffix="#mode=bytes"
-    final_url=DWD_GLOBAL_RAD_DATA_BASE_URL + filename + url_suffix
+    url_suffix = "#mode=bytes"
+    final_url = DWD_GLOBAL_RAD_DATA_BASE_URL + filename + url_suffix
     ds = Dataset(final_url)
     return ds
+
 
 def is_dataset_empty(dataset):
     """
