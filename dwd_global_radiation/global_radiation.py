@@ -173,7 +173,7 @@ class Measurement:
         if not any(entry.timestamp == timestamp for entry in self.measurement_values):
             self.measurement_values.append(MeasurementEntry(timestamp, sis))
         else:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Duplicate timestamp %s found. Measurement value not added.", timestamp
             )
 
