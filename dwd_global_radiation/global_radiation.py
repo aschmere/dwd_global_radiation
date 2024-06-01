@@ -27,6 +27,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+import json
 
 import numpy as np
 import tzlocal
@@ -113,6 +114,47 @@ class Location:
             ],
             "forecasts": [forecast.to_dict() for forecast in self.forecasts],
         }
+
+    def get_forecast_for_future_hour(self, datetime_input, number_of_hours):
+        """
+        Retrieves the forecast for a specific hour in the future.
+
+        Args:
+            datetime_input (datetime): The base datetime from which to calculate the future hour.
+            number_of_hours (int): The number of hours into the future for which to
+            retrieve the forecast.
+
+        Returns:
+            str: A JSON string containing the forecast timestamp in UTC and sis (Global Radiation)
+                 value, or an error message if no forecast is found for the specified time.
+        """
+        # Ensure datetime_input is in UTC
+        datetime_input = datetime_input.astimezone(timezone.utc)
+
+        # Find the index of the forecast entry that is at or just after datetime_input
+        start_index = 0
+        while (
+            start_index < len(self.forecasts[0].entries)
+            and self.forecasts[0].entries[start_index].timestamp
+            < datetime_input.timestamp()
+        ):
+            start_index += 1
+
+        # Calculate the target index
+        target_index = start_index + number_of_hours - 1
+
+        if target_index < len(self.forecasts[0].entries):
+            forecast_entry = self.forecasts[0].entries[target_index]
+            return json.dumps(
+                {
+                    "timestamp": datetime.fromtimestamp(
+                        forecast_entry.timestamp, tz=timezone.utc
+                    ).strftime("%Y-%m-%dT%H:%M:%S%z"),
+                    "sis": round(forecast_entry.sis),
+                }
+            )
+
+        return json.dumps({"error": "No forecast found for the specified time"})
 
 
 @dataclass
@@ -264,6 +306,8 @@ class ForecastEntry:
             "timestamp": float(self.timestamp),  # Explicit conversion to float
             "sis": float(self.sis),  # Explicit conversion to float
         }
+
+
 @dataclass
 class GlobalRadiation:
     """This is the main class of the DWD Global Radiation Observation and Forecast Data Library
@@ -318,9 +362,12 @@ class GlobalRadiation:
         print_header(title)
         for location in self.locations:
             print(f"{config.labels['location']}: {location.name}")
-            print(f"{config.indent_config.indent}{config.labels['latitude']}: {location.latitude}")
             print(
-                f"{config.indent_config.indent}{config.labels['longitude']}: {location.longitude}")
+                f"{config.indent_config.indent}{config.labels['latitude']}: {location.latitude}"
+            )
+            print(
+                f"{config.indent_config.indent}{config.labels['longitude']}: {location.longitude}"
+            )
 
             if location.measurements:
                 print_measurements(location.measurements, config)

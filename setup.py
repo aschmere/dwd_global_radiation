@@ -15,7 +15,7 @@ with open('README.md', encoding='utf-8') as f:
 
 setup(
     name='dwd_global_radiation',
-    version='1.1.0rc4',
+    version='1.1.0rc5',
     packages=find_packages(),
     description='Access and analyze DWD global radiation data and forecasts',
     long_description=long_description,
