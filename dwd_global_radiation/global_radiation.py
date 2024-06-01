@@ -125,8 +125,8 @@ class Location:
             retrieve the forecast.
 
         Returns:
-            str: A JSON string containing the forecast timestamp in UTC and sis (Global Radiation)
-                 value, or an error message if no forecast is found for the specified time.
+            dict: A dictionary containing the forecast timestamp in UTC and sis (Global Radiation)
+                  value, or an error message if no forecast is found for the specified time.
         """
         # Ensure datetime_input is in UTC
         datetime_input = datetime_input.astimezone(timezone.utc)
@@ -145,16 +145,14 @@ class Location:
 
         if target_index < len(self.forecasts[0].entries):
             forecast_entry = self.forecasts[0].entries[target_index]
-            return json.dumps(
-                {
-                    "timestamp": datetime.fromtimestamp(
-                        forecast_entry.timestamp, tz=timezone.utc
-                    ).strftime("%Y-%m-%dT%H:%M:%S%z"),
-                    "sis": round(forecast_entry.sis),
-                }
-            )
+            return {
+                "timestamp": datetime.fromtimestamp(
+                    forecast_entry.timestamp, tz=timezone.utc
+                ).strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "sis": round(forecast_entry.sis),
+            }
 
-        return json.dumps({"error": "No forecast found for the specified time"})
+        return {"error": "No forecast found for the specified time"}
 
 
 @dataclass
