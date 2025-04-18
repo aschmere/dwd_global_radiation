@@ -27,7 +27,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
-import json
 
 import numpy as np
 import tzlocal
@@ -58,7 +57,7 @@ class GlobalForecastData:
         all_grid_forecasts (Any): The cached forecast data.
     """
 
-    issuance_time: float = None
+    issuance_time: float = None  # type: ignore
     all_grid_forecasts: Any = None  # The actual forecast data cache∏
 
 
@@ -74,8 +73,8 @@ class GlobalMeasurementData:
         all_grid_measurements (list): List to store arrays of measurement data from multiple files.
     """
 
-    issuance_time: float = None
-    latest_file_time: datetime = None  # New attribute to store the latest file time
+    issuance_time: float = None  # type: ignore
+    latest_file_time: datetime = None  # type: ignore # New attribute to store the latest file time
     all_grid_measurements: list = field(
         default_factory=list
     )  # List to store measurement data arrays
@@ -227,9 +226,9 @@ class Forecast:
     """Class for storing Forecast data retrieved in hourly granularity from DWD servers"""
 
     issuance_time: str
-    grid_latitude: float = None
-    grid_longitude: float = None
-    distance: float = None
+    grid_latitude: float = None  # type: ignore
+    grid_longitude: float = None  # type: ignore
+    distance: float = None  # type: ignore
     entries: list = field(default_factory=list)
     metadata: dict = field(
         default_factory=lambda: {
@@ -314,14 +313,14 @@ class GlobalRadiation:
     for retrieving the data from DWD servers via http file download."""
 
     locations: list = field(default_factory=list)
-    last_measurement_fetch_date: datetime = None
-    last_forecast_fetch_date: datetime = None
+    last_measurement_fetch_date: datetime = None  # type: ignore
+    last_forecast_fetch_date: datetime = None  # type: ignore
     measurement_health_state: str = "green"
     forecast_health_state: str = "green"
-    forecast_data: GlobalForecastData = field(default_factory=GlobalForecastData)
+    forecast_data: GlobalForecastData = field(default_factory=GlobalForecastData)  # type: ignore
     measurement_data: GlobalMeasurementData = field(
-        default_factory=GlobalMeasurementData
-    )
+        default_factory=GlobalMeasurementData  # type: ignore
+    )  # type: ignore
 
     def to_dict(self):
         """Convert GlobalRadiation to a dictionary."""
@@ -354,7 +353,7 @@ class GlobalRadiation:
         """
         local_tz = tzlocal.get_localzone()
         title, labels, dt_format = get_language_details(language)
-        format_config = FormatConfig(dt_format=dt_format, local_tz=local_tz)
+        format_config = FormatConfig(dt_format=dt_format, local_tz=local_tz)  # type: ignore
         config = PrintConfig(labels=labels, format_config=format_config)
 
         print_header(title)
@@ -603,7 +602,7 @@ class GlobalRadiation:
             self._get_nearest_grid_point(latitude, longitude, grid_data)
         )
         measurement = Measurement(
-            grid_latitude, grid_longitude, nearest_distance, nearest_index
+            grid_latitude, grid_longitude, nearest_distance, nearest_index  # type: ignore
         )
         location.measurements = [measurement]
 
@@ -658,7 +657,7 @@ class GlobalRadiation:
                 return  # Stop processing as no data is available
 
             # Check the timeliness of the data
-            if _actualhoursbehind > 1:
+            if _actualhoursbehind > 1:  # type: ignore
                 self.forecast_health_state = "yellow"
                 _LOGGER.warning(
                     "Forecast data is %s hours behind. "
@@ -672,10 +671,8 @@ class GlobalRadiation:
                 )
 
             # Update the cached forecast data
-            global_issuance_time = (
-                utils.get_forecast_issuance_timestamp_from_netcdf_history_attrib(
-                    all_grid_forecasts.history
-                )
+            global_issuance_time = utils.get_forecast_issuance_timestamp_from_netcdf_history_attrib(
+                all_grid_forecasts.history  # type: ignore
             )
             self.forecast_data.issuance_time = global_issuance_time
             self.forecast_data.all_grid_forecasts = all_grid_forecasts
@@ -683,7 +680,7 @@ class GlobalRadiation:
         for location in self.locations:
             latitude = location.latitude
             longitude = location.longitude
-            selected_data = all_grid_forecasts.sel(
+            selected_data = all_grid_forecasts.sel(  # type: ignore
                 lon=longitude, lat=latitude, method="nearest"
             )
 
@@ -693,7 +690,7 @@ class GlobalRadiation:
                 )
             )
             forecast = Forecast(
-                issuance_time,
+                issuance_time,  # type: ignore
                 grid_latitude=round(selected_data.lat.item(), 2),
                 grid_longitude=round(selected_data.lon.item(), 2),
             )

@@ -15,7 +15,6 @@ Functions:
 
         Returns:
             tuple: A tuple containing:
-                - package_path (str): The file path to the package required for the project.
                 - locations (list of tuples): A list where each tuple contains latitude (float),
                   longitude (float), and a descriptive name (str) of a location.
 
@@ -34,52 +33,55 @@ This example serves to illustrate the practical implementation and operational f
 DWD library in a real-world application, guiding users through the process of setting up, fetching,
 and displaying radiation data.
 """
-import sys
+
 import configparser
 import time  # Import the time module
 import logging
+import sys
 
 logging.basicConfig(
     level=logging.DEBUG,  # Set the logging level
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Set the log message format
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Set the log message format
     handlers=[
         logging.StreamHandler(),  # Log to standard output (console)
-        logging.FileHandler('global_radiation.log'),  # Additionally log to a file
-    ]
+        logging.FileHandler("global_radiation.log"),  # Additionally log to a file
+    ],
 )
+
 
 def read_configurations_from_file(file_path):
     """See module docstring for further information"""
     config = configparser.ConfigParser()
     config.read(file_path)
 
-    # Read package path
-    cfg_package_path = config['Package']['path']
-
     # Read locations
     cfg_locations = []
     location_prefix = "Location"
 
     for section in config.sections():
-        if section.startswith(location_prefix) and section[len(location_prefix):].isdigit():
-            cfg_latitude = float(config[section]['latitude'])
-            cfg_longitude = float(config[section]['longitude'])
-            cfg_name = config[section]['name']
+        if (
+            section.startswith(location_prefix)
+            and section[len(location_prefix) :].isdigit()
+        ):
+            cfg_latitude = float(config[section]["latitude"])
+            cfg_longitude = float(config[section]["longitude"])
+            cfg_name = config[section]["name"]
             cfg_locations.append((cfg_latitude, cfg_longitude, cfg_name))
 
-    return cfg_package_path, cfg_locations
+    return cfg_locations
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python simple_test_global_radiation.py <path/to/coordinates.ini>")
+        sys.exit(1)
     start_time = time.time()  # Record the start time
 
     # Path to the external file containing configurations
-    CONFIG_FILE_PATH = 'tests/coordinates.ini'  # Update with your file path
+    CONFIG_FILE_PATH = sys.argv[1]
 
     # Read configurations from the external file
-    main_package_path, main_locations = read_configurations_from_file(CONFIG_FILE_PATH)
-
-    # Update sys.path with the package path
-    sys.path.insert(0, main_package_path)
+    main_locations = read_configurations_from_file(CONFIG_FILE_PATH)
 
     import dwd_global_radiation
 
@@ -91,12 +93,11 @@ if __name__ == '__main__':
         objGlobalRadiation.add_location(latitude=lat, longitude=lon, name=loc_name)
 
     objGlobalRadiation.fetch_forecasts()
-    objGlobalRadiation.fetch_forecasts() #test caching
+    objGlobalRadiation.fetch_forecasts()  # test caching
     objGlobalRadiation.fetch_measurements(max_hour_age_of_measurement=1)
-    objGlobalRadiation.fetch_measurements(max_hour_age_of_measurement=1) #test caching
+    objGlobalRadiation.fetch_measurements(max_hour_age_of_measurement=1)  # test caching
 
     objGlobalRadiation.print_data(language="German")
 
     end_time = time.time()  # Record the end time
     print(f"Program execution time: {end_time - start_time:.2f} seconds")
-    
