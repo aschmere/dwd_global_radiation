@@ -9,7 +9,7 @@ description = "Access and analyze DWD global radiation data and forecasts"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Arno Schmerer" }]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 keywords = [
   "weather", "meteorology", "radiation", "solar",
   "forecasting", "DWD", "climate", "solar energy",
