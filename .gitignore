@@ -1,6 +1,7 @@
-dwd_global_radiation/__pycache__
+__pycache__/
+.pytest_cache/
 tests/coordinates.bak
-.venv-dwd-global-radiation/
+.venv/
 .coverage
 .vscode
 requirements_pipfreeze.txt
