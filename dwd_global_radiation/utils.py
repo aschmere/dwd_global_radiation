@@ -14,7 +14,6 @@ from bs4 import BeautifulSoup
 from netCDF4 import Dataset
 
 # pylint: enable=no-name-in-module
-import pytz
 
 MAX_HOURS_TO_GO_BACK = 10
 HOURLY_MINUTE_TO_FETCH_NEW_FILE = 15
@@ -423,7 +422,7 @@ def process_line(line, context):
     try:
         match = re.match(context.regex_pattern_measurement_time, href)
         year, month, day, hour, minute = map(int, match.groups())
-        utc_file_date = datetime(year, month, day, hour, minute, tzinfo=pytz.UTC)
+        utc_file_date = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
         if context.max_age_hours is not None and (
             context.current_utc_date - utc_file_date
             > timedelta(hours=context.max_age_hours)
