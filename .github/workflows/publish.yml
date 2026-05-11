@@ -1,0 +1,46 @@
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Smoke-test the built wheel
+        run: |
+          uv venv /tmp/wheel-test
+          source /tmp/wheel-test/bin/activate
+          uv pip install dist/*.whl
+          python -c "import dwd_global_radiation; print('ok:', dwd_global_radiation.__file__)"
+          deactivate
+
+      - name: Upload built distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
