@@ -21,11 +21,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
+      - name: Create virtual environment
+        run: uv venv
+
       - name: Install package with dev extras
-        run: uv pip install -e ".[dev]" --system
+        run: uv pip install -e ".[dev]"
 
       - name: Run pytest
-        run: pytest -v
+        run: uv run pytest -v
 
   build:
     runs-on: ubuntu-latest
