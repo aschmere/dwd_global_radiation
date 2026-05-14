@@ -37,6 +37,8 @@ from string import Template
 
 from tabulate import tabulate
 
+from .products import PRODUCTS
+
 
 @dataclass
 class IndentConfig:
@@ -152,6 +154,7 @@ def get_language_details(language):
     """
     Returns the title, labels, and date-time format based on the specified language.
     """
+    sis_product = PRODUCTS["SIS"]
     if language == "German":
         title = "DWD Vorhersage- und Beobachtungsdaten ausgewählter Standorte"
         labels = {
@@ -160,7 +163,7 @@ def get_language_details(language):
             "longitude": "Längengrad",
             "measurements": "Messungen",
             "timestamp": "Zeitstempel",
-            "sis": "SIS Wert in W/m2",
+            "sis": sis_product.label_de,
             "grid_latitude": "Rasterbreitengrad",
             "grid_longitude": "Rasterlängengrad",
             "distance": "Entfernung der Lokation zum nächsten Gridpunkt in km",
@@ -178,7 +181,7 @@ def get_language_details(language):
             "longitude": "Longitude",
             "measurements": "Measurements",
             "timestamp": "Timestamp",
-            "sis": "SIS Value in W/m2",
+            "sis": sis_product.label_en,
             "grid_latitude": "Grid Latitude",
             "grid_longitude": "Grid Longitude",
             "distance": "Distance of the location to the nearest gridpoint in km",
