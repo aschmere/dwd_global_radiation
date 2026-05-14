@@ -33,6 +33,7 @@ import numpy as np
 import tzlocal
 
 from . import utils
+from .products import PRODUCTS
 from .global_radiation_printer import (
     FormatConfig,
     PrintConfig,
@@ -209,7 +210,7 @@ class Measurement:
         }
 
     def add_measurement_value(self, timestamp, sis):
-        """Method for adding retrieved measurement values as SIS."""
+        """Method for adding a retrieved radiation measurement value."""
         if not any(entry.timestamp == timestamp for entry in self.measurement_values):
             self.measurement_values.append(MeasurementEntry(timestamp, sis))
         else:
@@ -457,11 +458,12 @@ class GlobalRadiation:
         )
 
     def _get_measurement_value_from_loaded_data(
-        self, all_grid_global_rad_data, nearest_index
+        self, all_grid_global_rad_data, nearest_index, product="SIS"
     ):
         lat_index = nearest_index // all_grid_global_rad_data.variables["lat"].shape[0]
         lon_index = nearest_index % all_grid_global_rad_data.variables["lat"].shape[0]
-        measurement_value = all_grid_global_rad_data.variables["SIS"][:][
+        nc_variable = PRODUCTS[product].nc_variable
+        measurement_value = all_grid_global_rad_data.variables[nc_variable][:][
             0, lat_index, lon_index
         ]
         units_string = all_grid_global_rad_data.variables["time"].units
@@ -549,7 +551,7 @@ class GlobalRadiation:
 
             # Process each file
             for file, _ in matching_files:  # file_time is no longer needed
-                all_grid_global_rad_data = utils.load_sis_data(file)
+                all_grid_global_rad_data = utils.load_radiation_data(file)
                 self.measurement_data.all_grid_measurements.append(
                     all_grid_global_rad_data
                 )
@@ -612,10 +614,10 @@ class GlobalRadiation:
         Updates the measurement for a given location.
         """
         measurement = location.measurements[0]
-        timestamp, sis_value = self._get_measurement_value_from_loaded_data(
+        timestamp, value = self._get_measurement_value_from_loaded_data(
             all_grid_global_rad_data, measurement.nearest_index
         )
-        measurement.add_measurement_value(timestamp, sis_value)
+        measurement.add_measurement_value(timestamp, value)
 
     def fetch_forecasts(self):
         """
@@ -697,15 +699,17 @@ class GlobalRadiation:
                 grid_latitude=round(selected_data.lat.item(), 2),
                 grid_longitude=round(selected_data.lon.item(), 2),
             )
+            nc_variable = PRODUCTS["SIS"].nc_variable
+            forecast_var = getattr(selected_data, nc_variable)
             forecast.set_metadata(
-                standard_name=selected_data.SIS.standard_name,
-                long_name=selected_data.SIS.long_name,
-                units=selected_data.SIS.units,
+                standard_name=forecast_var.standard_name,
+                long_name=forecast_var.long_name,
+                units=forecast_var.units,
             )
             forecast.set_distance(latitude, longitude)
 
             for timestamp, value in zip(
-                selected_data.time.values, selected_data.SIS.values
+                selected_data.time.values, forecast_var.values
             ):
                 timestamp_of_entry = timestamp.astype("datetime64[s]").astype("float")
                 if timestamp_of_entry > current_date.timestamp():

@@ -15,11 +15,10 @@ from netCDF4 import Dataset
 
 # pylint: enable=no-name-in-module
 
+from .products import PRODUCTS
+
 MAX_HOURS_TO_GO_BACK = 10
 HOURLY_MINUTE_TO_FETCH_NEW_FILE = 15
-DWD_GLOBAL_RAD_DATA_BASE_URL = (
-    "https://opendata.dwd.de/weather/satellite/radiation/sis/"
-)
 
 
 @dataclass
@@ -55,7 +54,7 @@ class FileParsingContext:
     file_times: list
 
 
-def get_current_solar_radiation_forecast_url(hourstogoback, current_date):
+def get_current_solar_radiation_forecast_url(hourstogoback, current_date, product="SIS"):
     """
     Generates a URL to fetch the solar radiation forecast from the DWD (Deutscher Wetterdienst)
     OpenData server. The URL is constructed based on a specified `current_date` adjusted by
@@ -68,6 +67,9 @@ def get_current_solar_radiation_forecast_url(hourstogoback, current_date):
                              desired date and time for the forecast.
         current_date (datetime.datetime): The current datetime from which the forecast
                                           will be calculated.
+        product (str): Code of the radiation product to fetch (defaults to ``"SIS"``).
+                       The product's ``forecast_base_url`` is looked up in
+                       :data:`dwd_global_radiation.products.PRODUCTS`.
 
     Returns:
         str: A string representing the full URL to access the forecast data for the calculated
@@ -125,7 +127,9 @@ def get_current_solar_radiation_forecast_url(hourstogoback, current_date):
     str_target_day = f"{target_day:02d}"
     str_target_hour = f"{target_hour:02d}"
 
-    base_url = "https://opendata.dwd.de/weather/satellite/radiation/sis/SISfc"
+    base_url = PRODUCTS[product].forecast_base_url
+    if base_url is None:
+        raise ValueError(f"Product {product!r} has no forecast base URL configured")
     url_suffix = "_fc%2B18h-DE.nc#mode=bytes"
 
     url = (
@@ -186,7 +190,9 @@ def haversine(lat1, lon1, lat2, lon2):
     return distance
 
 
-def load_forecast_dataset(current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BACK):
+def load_forecast_dataset(
+    current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BACK, product="SIS"
+):
     """
     Attempts to load the forecast dataset for a given number of hours
     going back from the current date.
@@ -194,6 +200,7 @@ def load_forecast_dataset(current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BAC
     Args:
         current_date (datetime): The current date and time.
         max_hours_to_go_back (int): The maximum number of hours to attempt loading data for.
+        product (str): Code of the radiation product to fetch (defaults to ``"SIS"``).
 
     Returns:
         tuple: A tuple containing the dataset and the hour offset, or (None, None)
@@ -204,7 +211,7 @@ def load_forecast_dataset(current_date, max_hours_to_go_back=MAX_HOURS_TO_GO_BAC
     """
     last_exception = None
     for i in range(max_hours_to_go_back):
-        url = get_current_solar_radiation_forecast_url(i, current_date)
+        url = get_current_solar_radiation_forecast_url(i, current_date, product=product)
         try:
             ds = xr.open_dataset(url)
             return ds, i
@@ -274,7 +281,7 @@ def get_measurement_timestamp_from_netcdf_history_attrib(history):
         float: The UNIX timestamp representing the UTC time of the measurement.
 
     Example:
-        history = "Mon May 27 16:03:17 2024: cdo -selvar,SIS -sellonlatbox,5,16,46,57 ..."
+        history = "Mon May 27 16:03:17 2024: cdo -selvar,<VAR> -sellonlatbox,5,16,46,57 ..."
         timestamp = get_measurement_timestamp_from_netcdf_history_attrib(history)
         print(timestamp)  # Outputs the UNIX timestamp for 'Mon May 27 16:03:17 2024' UTC
 
@@ -301,7 +308,9 @@ def get_measurement_timestamp_from_netcdf_history_attrib(history):
     return timestamp
 
 
-def get_matching_dwd_globalrad_data_files(current_utc_date=None, max_age_hours=None):
+def get_matching_dwd_globalrad_data_files(
+    current_utc_date=None, max_age_hours=None, product="SIS"
+):
     """
     Retrieves and filters files from the DWD Global Radiation Data Base URL based on the
     provided regex pattern and the age limit defined by `max_age_hours` relative to the
@@ -314,6 +323,8 @@ def get_matching_dwd_globalrad_data_files(current_utc_date=None, max_age_hours=N
         max_age_hours (int, optional): The maximum age in hours for the files to be considered
             relevant. Files older than this age relative to `current_utc_date` will not be included.
             If None, no age filter will be applied.
+        product (str): Code of the radiation product whose measurement directory and filename
+            patterns should be used (defaults to ``"SIS"``).
 
     Returns:
         list of tuples: A sorted list of tuples, where each tuple contains the URL and the
@@ -333,9 +344,10 @@ def get_matching_dwd_globalrad_data_files(current_utc_date=None, max_age_hours=N
         a context object (`FileParsingContext`) to pass state across helper functions for better
         modularity and readability.
     """
-    regex_pattern = r"^SISin\d{12}DEv3\.nc$"
-    regex_pattern_measurement_time = r"SISin(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})DEv3\.nc"
-    response = requests.get(DWD_GLOBAL_RAD_DATA_BASE_URL, timeout=(10, 10))
+    product_info = PRODUCTS[product]
+    regex_pattern = product_info.measurement_filename_regex
+    regex_pattern_measurement_time = product_info.measurement_filename_capture_regex
+    response = requests.get(product_info.measurement_base_url, timeout=(10, 10))
     if response.status_code == 200:
         context = FileParsingContext(
             regex_pattern,
@@ -434,15 +446,17 @@ def process_line(line, context):
         pass  # Ignore lines that do not have a valid date/time format
 
 
-def load_sis_data(filename):
+def load_radiation_data(filename, product="SIS"):
     """
     Constructs a full URL for a given filename and loads the dataset from this URL using the Dataset
-    class. The URL is constructed by appending a filename to the predefined base URL and adding a
-    suffix to specify the mode of access.
+    class. The URL is constructed by appending a filename to the product's measurement base URL
+    and adding a suffix to specify the mode of access.
 
     Parameters:
         filename (str): The name of the file to be loaded, which should
-        be located at the DWD_GLOBAL_RAD_DATA_BASE_URL.
+            be located under the product's ``measurement_base_url``.
+        product (str): Code of the radiation product whose measurement base URL should be
+            used (defaults to ``"SIS"``).
 
     Returns:
         Dataset: An object representing the loaded dataset, initialized with data
@@ -450,18 +464,18 @@ def load_sis_data(filename):
 
 
     Example:
-        >>> dataset = load_sis_data("SISin20210101.nc")
+        >>> dataset = load_radiation_data("SISin20210101.nc")
         >>> print(dataset)  # Outputs the properties or contents of the dataset, dependent
         on Dataset class implementation.
 
     Notes:
-        The function assumes the existence of a global constant 'DWD_GLOBAL_RAD_DATA_BASE_URL'
-        which contains the base URL to which filenames and URL parameters are appended.
-        The `url_suffix` is used to specify that the data should be accessed in byte mode,
+        The base URL is looked up via
+        :data:`dwd_global_radiation.products.PRODUCTS` from the given ``product`` code.
+        The ``url_suffix`` is used to specify that the data should be accessed in byte mode,
         which is necessary for certain types of binary data files.
     """
     url_suffix = "#mode=bytes"
-    final_url = DWD_GLOBAL_RAD_DATA_BASE_URL + filename + url_suffix
+    final_url = PRODUCTS[product].measurement_base_url + filename + url_suffix
     ds = Dataset(final_url)
     return ds
 
